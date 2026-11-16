@@ -15,6 +15,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -96,8 +97,6 @@ fun HomeSmartHeader(
     onReplaceWidget: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    if (config.mode == HeaderMode.HIDDEN) return
-
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
     var showConfigSheet by remember { mutableStateOf(false) }
@@ -107,61 +106,63 @@ fun HomeSmartHeader(
         showConfigSheet = true
     }
 
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 8.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .combinedClickable(
-                onClick = {
-                    when (config.mode) {
-                        HeaderMode.CLOCK_ONLY -> openClockApp(context)
-                        HeaderMode.CALENDAR_ONLY -> openCalendarApp(context)
-                        HeaderMode.WEATHER_ONLY -> openWeatherApp(context, weatherData)
-                        else -> {}
-                    }
-                },
-                onLongClick = onHeaderLongClick,
-            ),
-    ) {
-        when (config.mode) {
-            HeaderMode.COMBINED -> {
-                CombinedGlanceView(
-                    timeData = timeData,
-                    calendarState = calendarState,
-                    weatherData = weatherData,
-                    useFahrenheit = config.useFahrenheit,
-                    size = config.size,
-                    onClockClick = { openClockApp(context) },
-                    onCalendarClick = { openCalendarApp(context) },
-                    onWeatherClick = { openWeatherApp(context, weatherData) },
+    if (config.mode != HeaderMode.HIDDEN) {
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp, vertical = 8.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .combinedClickable(
+                    onClick = {
+                        when (config.mode) {
+                            HeaderMode.CLOCK_ONLY -> openClockApp(context)
+                            HeaderMode.CALENDAR_ONLY -> openCalendarApp(context)
+                            HeaderMode.WEATHER_ONLY -> openWeatherApp(context, weatherData)
+                            else -> {}
+                        }
+                    },
                     onLongClick = onHeaderLongClick,
-                )
+                ),
+        ) {
+            when (config.mode) {
+                HeaderMode.COMBINED -> {
+                    CombinedGlanceView(
+                        timeData = timeData,
+                        calendarState = calendarState,
+                        weatherData = weatherData,
+                        useFahrenheit = config.useFahrenheit,
+                        size = config.size,
+                        onClockClick = { openClockApp(context) },
+                        onCalendarClick = { openCalendarApp(context) },
+                        onWeatherClick = { openWeatherApp(context, weatherData) },
+                        onLongClick = onHeaderLongClick,
+                    )
+                }
+                HeaderMode.CLOCK_ONLY -> {
+                    ClockFocusView(
+                        timeData = timeData,
+                        size = config.size,
+                        onClockClick = { openClockApp(context) },
+                    )
+                }
+                HeaderMode.CALENDAR_ONLY -> {
+                    CalendarFocusView(
+                        timeData = timeData,
+                        calendarState = calendarState,
+                        size = config.size,
+                        onCalendarClick = { openCalendarApp(context) },
+                    )
+                }
+                HeaderMode.WEATHER_ONLY -> {
+                    WeatherFocusView(
+                        weatherData = weatherData,
+                        useFahrenheit = config.useFahrenheit,
+                        size = config.size,
+                        onWeatherClick = { openWeatherApp(context, weatherData) },
+                    )
+                }
+                HeaderMode.HIDDEN -> {}
             }
-            HeaderMode.CLOCK_ONLY -> {
-                ClockFocusView(
-                    timeData = timeData,
-                    size = config.size,
-                    onClockClick = { openClockApp(context) },
-                )
-            }
-            HeaderMode.CALENDAR_ONLY -> {
-                CalendarFocusView(
-                    timeData = timeData,
-                    calendarState = calendarState,
-                    size = config.size,
-                    onCalendarClick = { openCalendarApp(context) },
-                )
-            }
-            HeaderMode.WEATHER_ONLY -> {
-                WeatherFocusView(
-                    weatherData = weatherData,
-                    useFahrenheit = config.useFahrenheit,
-                    size = config.size,
-                    onWeatherClick = { openWeatherApp(context, weatherData) },
-                )
-            }
-            HeaderMode.HIDDEN -> {}
         }
     }
 
@@ -785,24 +786,36 @@ private fun HeaderSettingsSheet(
                 HeaderMode.HIDDEN to stringResource(R.string.header_mode_hidden),
             )
 
-            modes.forEach { (mode, label) ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    RadioButton(
-                        selected = config.mode == mode,
-                        onClick = { onModeChange(mode) },
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                modes.forEach { (mode, label) ->
+                    val selected = config.mode == mode
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { onModeChange(mode) },
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                            )
+                            RadioButton(
+                                selected = selected,
+                                onClick = { onModeChange(mode) },
+                            )
+                        }
+                    }
                 }
             }
 
