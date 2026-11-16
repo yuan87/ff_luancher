@@ -2,11 +2,10 @@ package com.ff.launcher.ui
 
 import android.content.Context
 import android.content.Intent
-import android.view.View
-import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.BackHandler
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -25,75 +24,34 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.AbsoluteAlignment
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ff.launcher.SettingsActivity
 import com.ff.launcher.data.QuickActionType
 import com.ff.launcher.data.TriggerEdgeSide
 import com.ff.launcher.data.db.HOME_WIDGET_SLOT_ID
 import com.ff.launcher.data.db.SLOT_FRACTION_SMALL
 import com.ff.launcher.data.db.WidgetSlotEntity
 import com.ff.launcher.ui.home.AppSearchSheet
+import com.ff.launcher.ui.home.DefaultLauncherBanner
 import com.ff.launcher.ui.home.HomeScreen
 import com.ff.launcher.ui.home.ManageFavoritesSheet
+import com.ff.launcher.ui.onboarding.WelcomeOnboardingScreen
 import com.ff.launcher.ui.quickaction.QuickActionButton
 import com.ff.launcher.ui.quickaction.QuickActionPickerSheet
-import com.ff.launcher.SettingsActivity
 import com.ff.launcher.ui.secondary.SecondaryScreen
 import com.ff.launcher.ui.secondary.WidgetPickerSheet
-import com.ff.launcher.ui.onboarding.WelcomeOnboardingScreen
 import com.ff.launcher.ui.trigger.EdgeTrigger
 import com.ff.launcher.viewmodel.LauncherViewModel
-import com.ff.launcher.widget.LauncherAppWidgetHostView
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import com.ff.launcher.R
-import com.ff.launcher.ui.theme.AccentGreen
 
 /** The wave scroller occupies 35%–85% of the screen height on the right edge. */
 private const val SCROLLER_TOP_FRACTION = 0.35f
 private const val SCROLLER_BOTTOM_FRACTION = 0.85f
-
-/** SPEC Module 4: idle widgets' cached views are dropped after 5 minutes closed. */
-private const val WIDGET_CACHE_IDLE_MS = 5 * 60_000L
 
 
 /**
@@ -138,7 +96,6 @@ fun LauncherRoot(viewModel: LauncherViewModel) {
     }
     val listState = rememberLazyListState()
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
 
     val badgePreferences by viewModel.badgePreferences.collectAsStateWithLifecycle()
     val expandedBadgeKey by viewModel.expandedBadgeKey.collectAsStateWithLifecycle()
@@ -151,32 +108,11 @@ fun LauncherRoot(viewModel: LauncherViewModel) {
         if (isDefaultLauncher) bannerDismissed.value = false
     }
 
-    // Widget host-view cache lives HERE — activity-scoped composition — and NOT in the
-    // ViewModel: AppWidgetHostView/RemoteViews need an Activity context for PendingIntent
-    // launches (background-activity-launch rules), themed inflation and collection
-    // widgets, so a ViewModel-owned cache would either pin the Activity across
-    // recreation or break widget clicks on Android 12+. The cache dies with this
-    // composition (config changes included); the 5-minute idle purge below implements
-    // SPEC Module 4 for the stay-open case.
-    val hostViewCache = remember { mutableMapOf<Int, LauncherAppWidgetHostView>() }
-    val cachePurgeJob = remember { mutableStateOf<Job?>(null) }
-
-    fun obtainHostView(context: Context, slotId: Int, appWidgetId: Int): LauncherAppWidgetHostView? {
-        hostViewCache[slotId]?.let { cached ->
-            if (cached.appWidgetId == appWidgetId) {
-                // Strip a stale Compose holder to avoid "already has a parent".
-                (cached.parent as? ViewGroup)?.removeView(cached)
-                return cached
-            }
-            // The slot was re-bound to a different widget — evict the old cache.
-            (cached.parent as? ViewGroup)?.removeView(cached)
-            hostViewCache.remove(slotId)
-        }
-        return viewModel.createHostView(context, appWidgetId)?.also {
-            hostViewCache[slotId] = it
-            viewModel.refreshWidgetListening()
-        }
-    }
+    val hostViewCache = rememberWidgetHostViewCache(
+        viewModel = viewModel,
+        isSecondScreenOpen = isSecondScreenOpen,
+        widgetSlots = widgetSlots,
+    )
 
     // Return mechanic #1: system edge-back gesture closes the Secondary Screen.
     BackHandler(enabled = isSecondScreenOpen) {
@@ -193,45 +129,6 @@ fun LauncherRoot(viewModel: LauncherViewModel) {
     val homeRoleLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
     ) { viewModel.refreshDefaultLauncherState() }
-    // Deck composition lifecycle drives the widget view-cache purge timer (SPEC Module 4):
-    // on close, drop GPU layers off the cached host views and arm the 5-minute idle purge.
-    LaunchedEffect(isSecondScreenOpen) {
-        if (isSecondScreenOpen) {
-            cachePurgeJob.value?.cancel()
-            cachePurgeJob.value = null
-        } else {
-            hostViewCache.filterKeys { it != HOME_WIDGET_SLOT_ID }.values.forEach {
-                it.setLayerType(View.LAYER_TYPE_NONE, null)
-            }
-            cachePurgeJob.value?.cancel()
-            cachePurgeJob.value = scope.launch {
-                delay(WIDGET_CACHE_IDLE_MS)
-                val secondarySlotIds = hostViewCache.keys.filter { it != HOME_WIDGET_SLOT_ID }
-                secondarySlotIds.forEach { slotId ->
-                    hostViewCache.remove(slotId)?.let { v ->
-                        (v.parent as? ViewGroup)?.removeView(v)
-                    }
-                }
-            }
-        }
-    }
-
-    // Evict cache entries whose slot lost its binding (widget removed) or was re-bound
-    // to a different widget — otherwise a removed slot's host view (and its whole
-    // RemoteViews hierarchy) lingers in the cache for up to 5 minutes.
-    LaunchedEffect(widgetSlots) {
-        val boundAppWidgetIds = widgetSlots
-            .filter { it.appWidgetId != null }
-            .associate { it.slotId to it.appWidgetId }
-        hostViewCache.entries.removeAll { entry ->
-            val stale = boundAppWidgetIds[entry.key] != entry.value.appWidgetId
-            if (stale) {
-                (entry.value.parent as? ViewGroup)?.removeView(entry.value)
-                entry.value.setLayerType(View.LAYER_TYPE_NONE, null)
-            }
-            stale
-        }
-    }
 
     BoxWithConstraints(
         modifier = Modifier
@@ -259,7 +156,7 @@ fun LauncherRoot(viewModel: LauncherViewModel) {
                 onRefreshWeather = viewModel::refreshWeather,
                 onReplaceHomeWidget = viewModel::replaceHomeWidget,
                 onRestoreDefaultClock = viewModel::restoreDefaultClockWidget,
-                obtainHostView = ::obtainHostView,
+                obtainHostView = hostViewCache::obtain,
                 onAppClick = viewModel::launchApp,
                 onAppLongClick = viewModel::openManageFavorites,
                 onOpenDeck = { viewModel.setSecondScreenOpen(true) },
@@ -325,7 +222,7 @@ fun LauncherRoot(viewModel: LauncherViewModel) {
                 },
                 onUpdateSlotWeight = viewModel::setSlotHeightWeight,
                 onReorderSlots = viewModel::reorderSlots,
-                obtainHostView = ::obtainHostView,
+                obtainHostView = hostViewCache::obtain,
                 onDismiss = { viewModel.setSecondScreenOpen(false) },
             )
         }
@@ -458,111 +355,6 @@ fun LauncherRoot(viewModel: LauncherViewModel) {
                 },
                 onCompleteOnboarding = { viewModel.completeOnboarding() },
             )
-        }
-    }
-}
-
-/**
- * Modern Google Material 3 card prompting the user to set FF Launcher as the default home.
- */
-@Composable
-private fun DefaultLauncherBanner(
-    onClick: () -> Unit,
-    onDismiss: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val insets = WindowInsets.systemBars.asPaddingValues()
-    Card(
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-        ),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 6.dp),
-        border = BorderStroke(
-            width = 1.dp,
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-        ),
-        modifier = modifier
-            .padding(
-                start = 16.dp,
-                end = 16.dp,
-                top = insets.calculateTopPadding() + 8.dp,
-            )
-            .fillMaxWidth(),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Home,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(22.dp),
-                    )
-                }
-                Spacer(Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.onboarding_set_default),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = stringResource(R.string.banner_set_default),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                IconButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.size(32.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Close,
-                        contentDescription = stringResource(R.string.onboarding_skip),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-            }
-            Spacer(Modifier.height(14.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                FilledTonalButton(
-                    onClick = onClick,
-                    shape = RoundedCornerShape(14.dp),
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Check,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = stringResource(R.string.onboarding_set_default),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-            }
         }
     }
 }

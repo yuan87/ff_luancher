@@ -7,7 +7,7 @@ import android.net.Uri
 import android.os.Process
 import android.os.UserManager
 import android.provider.MediaStore
-import android.util.Log
+import com.ff.launcher.util.Logger
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringSetPreferencesKey
@@ -106,7 +106,7 @@ class FavoritesRepository(
                 }
             }
             legacyDataStore.edit { it.remove(KEY_FAVORITES) }
-        }.onFailure { Log.w(TAG, "Legacy favorites migration failed", it) }
+        }.onFailure { Logger.w(TAG, "Legacy favorites migration failed", it) }
     }
 
     /**
@@ -186,8 +186,8 @@ class FavoritesRepository(
                 }
             }
             legacyDataStore.edit { it[KEY_DEFAULT_SEEDED] = true }
-            Log.i(TAG, "Seeded ${toSeed.size} default favorites")
-        }.onFailure { Log.w(TAG, "Default favorites seeding failed", it) }
+            Logger.i(TAG) { "Seeded ${toSeed.size} default favorites" }
+        }.onFailure { Logger.w(TAG, "Default favorites seeding failed", it) }
     }
 
     companion object {

@@ -9,7 +9,7 @@ import android.location.Location
 import android.location.LocationManager
 import android.os.Build
 import android.os.CancellationSignal
-import android.util.Log
+import com.ff.launcher.util.Logger
 import androidx.core.content.ContextCompat
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -136,11 +136,11 @@ class WeatherRepository(private val context: Context) {
 
         val location = resolveLocation()
         val (lat, lon) = if (location != null) {
-            Log.i(TAG, "Using device location: lat=${location.latitude}, lon=${location.longitude}")
+            Logger.i(TAG) { "Using device location: lat=${location.latitude}, lon=${location.longitude}" }
             location.latitude to location.longitude
         } else {
             val fallback = getFallbackCoordinates()
-            Log.i(TAG, "Device location unavailable, using timezone fallback: lat=${fallback.first}, lon=${fallback.second}")
+            Logger.i(TAG) { "Device location unavailable, using timezone fallback: lat=${fallback.first}, lon=${fallback.second}" }
             fallback
         }
 
@@ -192,7 +192,7 @@ class WeatherRepository(private val context: Context) {
                             if (cont.isActive) cont.resume(loc)
                         }
                     } catch (e: Exception) {
-                        Log.w(TAG, "getCurrentLocation failed: ${e.message}")
+                        Logger.w(TAG, "getCurrentLocation failed: ${e.message}")
                         if (cont.isActive) cont.resume(null)
                     }
                 }
@@ -209,7 +209,7 @@ class WeatherRepository(private val context: Context) {
      */
     private fun getFallbackCoordinates(): Pair<Double, Double> {
         val tzId = TimeZone.getDefault().id
-        Log.d(TAG, "getFallbackCoordinates: resolving for tzId=$tzId")
+        Logger.d(TAG) { "getFallbackCoordinates: resolving for tzId=$tzId" }
         return when {
             tzId.startsWith("Asia/Singapore") || tzId == "Singapore" -> 1.3521 to 103.8198
             tzId.startsWith("Asia/Kuala_Lumpur") -> 3.1390 to 101.6869
@@ -251,8 +251,12 @@ class WeatherRepository(private val context: Context) {
         }
     }
 
-    private fun fetchFromOpenMeteo(lat: Double, lon: Double, isActualLocation: Boolean): WeatherData? {
-        return runCatching {
+    private suspend fun fetchFromOpenMeteo(
+        lat: Double,
+        lon: Double,
+        isActualLocation: Boolean,
+    ): WeatherData? = withContext(Dispatchers.IO) {
+        try {
             val urlString = "https://api.open-meteo.com/v1/forecast?" +
                 "latitude=$lat&longitude=$lon" +
                 "&current=temperature_2m,weather_code" +
@@ -266,8 +270,8 @@ class WeatherRepository(private val context: Context) {
             conn.requestMethod = "GET"
 
             if (conn.responseCode != 200) {
-                Log.w(TAG, "Open-Meteo returned HTTP ${conn.responseCode}")
-                return null
+                Logger.w(TAG, "Open-Meteo returned HTTP ${conn.responseCode}")
+                return@withContext null
             }
 
             val reader = BufferedReader(InputStreamReader(conn.inputStream))
@@ -290,17 +294,30 @@ class WeatherRepository(private val context: Context) {
             // Determine friendly location name:
             var locName = if (tz.isNotBlank()) tz else "Local Weather"
             if (isActualLocation) {
-                runCatching {
+                try {
                     if (Geocoder.isPresent()) {
                         val geocoder = Geocoder(context, Locale.getDefault())
-                        val addresses = geocoder.getFromLocation(lat, lon, 1)
-                        val address = addresses?.firstOrNull()
-                        val locality = address?.locality ?: address?.subAdminArea ?: address?.adminArea
+                        val locality = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            suspendCancellableCoroutine { continuation ->
+                                geocoder.getFromLocation(lat, lon, 1) { addresses ->
+                                    val address = addresses.firstOrNull()
+                                    val loc = address?.locality ?: address?.subAdminArea ?: address?.adminArea
+                                    if (continuation.isActive) continuation.resume(loc)
+                                }
+                            }
+                        } else {
+                            @Suppress("DEPRECATION")
+                            val addresses = geocoder.getFromLocation(lat, lon, 1)
+                            val address = addresses?.firstOrNull()
+                            address?.locality ?: address?.subAdminArea ?: address?.adminArea
+                        }
                         if (!locality.isNullOrBlank()) {
                             locName = locality
                         }
                     }
-                }.onFailure { Log.d(TAG, "Geocoder lookup skipped: ${it.message}") }
+                } catch (e: Exception) {
+                    Logger.d(TAG) { "Geocoder lookup skipped: ${e.message}" }
+                }
             }
 
             WeatherData(
@@ -314,7 +331,10 @@ class WeatherRepository(private val context: Context) {
                 lastUpdatedMs = System.currentTimeMillis(),
                 isLoading = false,
             )
-        }.onFailure { Log.w(TAG, "Weather fetch error", it) }.getOrNull()
+        } catch (t: Throwable) {
+            Logger.w(TAG, "Weather fetch error", t)
+            null
+        }
     }
 
     private suspend fun saveToCache(data: WeatherData) {

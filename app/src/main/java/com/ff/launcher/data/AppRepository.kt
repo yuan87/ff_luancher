@@ -15,9 +15,9 @@ import android.os.Looper
 import android.os.Process
 import android.os.UserHandle
 import android.os.UserManager
-import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
+import com.ff.launcher.util.Logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -127,7 +127,7 @@ class AppRepository(
         return service.profiles
             .flatMap { user ->
                 runCatching { service.getActivityList(null, user) }
-                    .onFailure { Log.w(TAG, "getActivityList failed for $user", it) }
+                    .onFailure { Logger.w(TAG, "getActivityList failed for $user", it) }
                     .getOrDefault(emptyList())
             }
             // Defensive: the launcher never lists itself (its activity has no LAUNCHER
@@ -135,7 +135,7 @@ class AppRepository(
             .filter { it.componentName.packageName != appContext.packageName }
             .mapNotNull { info ->
                 runCatching { info.toAppInfo(density, serials[info.user] ?: 0L) }
-                    .onFailure { Log.w(TAG, "Failed to load ${info.componentName}", it) }
+                    .onFailure { Logger.w(TAG, "Failed to load ${info.componentName}", it) }
                     .getOrNull()
             }
     }
@@ -167,7 +167,7 @@ class AppRepository(
                         userHandle = Process.myUserHandle(),
                         firstInstallTime = installTime,
                     )
-                }.onFailure { Log.w(TAG, "Failed to load $activityInfo", it) }
+                }.onFailure { Logger.w(TAG, "Failed to load $activityInfo", it) }
                     .getOrNull()
             }
     }
@@ -335,7 +335,7 @@ class AppRepository(
             ) = scheduleRefresh()
         }
         runCatching { service.registerCallback(callback, Handler(Looper.getMainLooper())) }
-            .onFailure { Log.w(TAG, "LauncherApps.registerCallback failed", it) }
+            .onFailure { Logger.w(TAG, "LauncherApps.registerCallback failed", it) }
         launcherAppsCallback = callback
     }
 

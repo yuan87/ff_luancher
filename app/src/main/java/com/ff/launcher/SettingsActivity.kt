@@ -2,7 +2,7 @@ package com.ff.launcher
 
 import android.content.Intent
 import android.os.Bundle
-import android.util.Log
+import com.ff.launcher.util.Logger
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -25,13 +25,13 @@ class SettingsActivity : ComponentActivity() {
 
     private val homeRoleLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-            Log.d(TAG, "homeRoleLauncher returned, refreshing default launcher state")
+            Logger.d(TAG) { "homeRoleLauncher returned, refreshing default launcher state" }
             viewModel.refreshDefaultLauncherState()
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Log.i(TAG, "onCreate called, taskId=$taskId")
+        Logger.i(TAG) { "onCreate called, taskId=$taskId" }
         enableEdgeToEdge()
         setContent {
             FFLauncherTheme {
@@ -62,7 +62,7 @@ class SettingsActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        Log.i(TAG, "onResume called")
+        Logger.i(TAG) { "onResume called" }
         viewModel.refreshDefaultLauncherState()
         viewModel.checkNotificationAccess()
     }

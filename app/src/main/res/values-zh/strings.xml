@@ -216,6 +216,7 @@
     <string name="notification_relative_days">%d天前</string>
     <string name="notification_generic_new">新通知</string>
     <string name="notification_generic_hidden">内容已隐藏</string>
+    <string name="notification_generic_title">通知</string>
     <string name="notification_count_label">%d 条通知</string>
     <string name="notification_counts_label">%d 条通知</string>
 

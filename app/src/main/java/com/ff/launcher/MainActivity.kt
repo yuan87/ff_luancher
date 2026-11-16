@@ -3,7 +3,7 @@ package com.ff.launcher
 import android.app.ActivityManager
 import android.content.Intent
 import android.os.Bundle
-import android.util.Log
+import com.ff.launcher.util.Logger
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -24,13 +24,13 @@ class MainActivity : ComponentActivity() {
 
     private val widgetBindLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            Log.d("MainActivity", "widgetBindLauncher result: ${result.resultCode}, data: ${result.data}")
+            Logger.d(TAG) { "widgetBindLauncher result: ${result.resultCode}, data: ${result.data}" }
             viewModel.onBindPermissionResult(result.resultCode, result.data)
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Log.i("MainActivity", "onCreate called, savedInstanceState=${savedInstanceState != null}")
+        Logger.i(TAG) { "onCreate called, savedInstanceState=${savedInstanceState != null}" }
         enableEdgeToEdge()
         setContent {
             FFLauncherTheme {
@@ -45,7 +45,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.widgetRequests.collect { request ->
-                    Log.d("MainActivity", "widgetRequests received: $request")
+                    Logger.d(TAG) { "widgetRequests received: $request" }
                     when (request) {
                         is WidgetRequest.BindPermission ->
                             widgetBindLauncher.launch(request.intent)
@@ -65,7 +65,7 @@ class MainActivity : ComponentActivity() {
     @Suppress("DEPRECATION")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        Log.d("MainActivity", "onActivityResult: requestCode=$requestCode, resultCode=$resultCode")
+        Logger.d(TAG) { "onActivityResult: requestCode=$requestCode, resultCode=$resultCode" }
         if (requestCode == REQUEST_CONFIGURE_WIDGET) {
             viewModel.onWidgetConfigureResult(resultCode, data)
         } else if (requestCode == REQUEST_BIND_WIDGET) {
@@ -74,6 +74,7 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
+        private const val TAG = "MainActivity"
         const val ACTION_REPLACE_HOME_WIDGET = "com.ff.launcher.action.REPLACE_HOME_WIDGET"
         const val ACTION_OPEN_SECOND_SCREEN = "com.ff.launcher.action.OPEN_SECOND_SCREEN"
         const val ACTION_OPEN_WIDGET_DECK = "com.ff.launcher.action.OPEN_WIDGET_DECK"
@@ -84,7 +85,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        Log.i("MainActivity", "onResume called")
+        Logger.i(TAG) { "onResume called" }
         // Ensure this home launcher task is never retained in the recent apps carousel,
         // and clean up any transient AppEntryActivity trampoline task, while preserving
         // the standalone SettingsActivity so the user can switch back to it via Recent Apps:
@@ -109,13 +110,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
-        Log.i("MainActivity", "onPause called")
+        Logger.i(TAG) { "onPause called" }
         viewModel.setHostResumed(false)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        Log.i("MainActivity", "onNewIntent called with intent=$intent")
+        Logger.i(TAG) { "onNewIntent called with intent=$intent" }
         // Return mechanic #2: the bottom-up Home gesture re-delivers ACTION_MAIN +
         // CATEGORY_HOME to this singleTask activity — collapse the Secondary Screen.
         handleHomeIntent(intent)
@@ -123,18 +124,18 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
-        Log.i("MainActivity", "onStop called")
+        Logger.i(TAG) { "onStop called" }
         // Do not force-close the Secondary Screen onStop: when the user taps a widget
         // and later taps Back, they return to the Secondary Screen they launched it from.
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        Log.i("MainActivity", "onDestroy called")
+        Logger.i(TAG) { "onDestroy called" }
     }
 
     private fun handleHomeIntent(intent: Intent?) {
-        Log.d("MainActivity", "handleHomeIntent: action=${intent?.action}, categories=${intent?.categories}")
+        Logger.d(TAG) { "handleHomeIntent: action=${intent?.action}, categories=${intent?.categories}" }
         if (intent?.action == ACTION_REPLACE_HOME_WIDGET) {
             viewModel.replaceHomeWidget()
             return
@@ -147,10 +148,7 @@ class MainActivity : ComponentActivity() {
             viewModel.setSecondScreenOpen(true)
             return
         }
-        if (intent != null &&
-            ((intent.action == Intent.ACTION_MAIN && intent.hasCategory(Intent.CATEGORY_HOME)) ||
-             intent.hasCategory(Intent.CATEGORY_HOME))
-        ) {
+        if (intent != null && intent.hasCategory(Intent.CATEGORY_HOME)) {
             viewModel.onHomeIntent()
         }
     }

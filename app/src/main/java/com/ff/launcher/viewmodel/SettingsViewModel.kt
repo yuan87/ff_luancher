@@ -1,35 +1,28 @@
 package com.ff.launcher.viewmodel
 
 import android.app.Application
-import android.app.role.RoleManager
 import android.content.Intent
-import android.os.Build
-import android.provider.Settings
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.ff.launcher.LauncherApp
 import com.ff.launcher.data.AppInfo
-import com.ff.launcher.data.AppRepository
+import com.ff.launcher.data.HiddenAppUi
 import com.ff.launcher.data.QuickActionConfig
-import com.ff.launcher.data.QuickActionPreferencesRepository
 import com.ff.launcher.data.QuickActionType
 import com.ff.launcher.data.TriggerConfig
 import com.ff.launcher.data.TriggerEdgeSide
 import com.ff.launcher.data.TriggerMode
-import com.ff.launcher.data.TriggerPreferencesRepository
 import com.ff.launcher.data.db.DEFAULT_WIDGET_SLOTS
 import com.ff.launcher.data.db.HOME_WIDGET_SLOT_ID
-import com.ff.launcher.data.db.LauncherDatabase
 import com.ff.launcher.data.db.WidgetSlotEntity
 import com.ff.launcher.data.glance.HeaderConfig
 import com.ff.launcher.data.glance.HeaderMode
-import com.ff.launcher.data.glance.HeaderPreferencesRepository
 import com.ff.launcher.data.glance.HeaderSize
 import com.ff.launcher.data.glance.WeatherData
-import com.ff.launcher.data.glance.WeatherRepository
 import com.ff.launcher.data.notification.BadgePreferences
-import com.ff.launcher.data.notification.BadgePreferencesRepository
 import com.ff.launcher.data.notification.BadgeScope
 import com.ff.launcher.notification.NotificationAccessHelper
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -48,16 +41,18 @@ import kotlinx.coroutines.launch
  */
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val appRepository = AppRepository(application, viewModelScope)
-    private val database = LauncherDatabase.get(application)
-    private val triggerRepository = TriggerPreferencesRepository(application)
-    private val quickActionRepository = QuickActionPreferencesRepository(application)
-    private val headerPreferencesRepository = HeaderPreferencesRepository(application)
-    private val weatherRepository = WeatherRepository(application)
-    private val badgePreferencesRepository = BadgePreferencesRepository(application)
+    private val app = application as LauncherApp
+    private val appRepository = app.appRepository
+    private val database = app.database
+    private val triggerRepository = app.triggerRepository
+    private val quickActionRepository = app.quickActionRepository
+    private val headerPreferencesRepository = app.headerRepository
+    private val weatherRepository = app.weatherRepository
+    private val badgePreferencesRepository = app.badgePreferencesRepository
+    private val onboardingRepository = app.onboardingRepository
 
     val badgePreferences: StateFlow<BadgePreferences> = badgePreferencesRepository.preferences
-        .stateIn(viewModelScope, SharingStarted.Eagerly, BadgePreferences())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BadgePreferences())
 
     private val _hasNotificationAccess = MutableStateFlow(NotificationAccessHelper.hasAccess(application))
     val hasNotificationAccess: StateFlow<Boolean> = _hasNotificationAccess.asStateFlow()
@@ -99,7 +94,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     val weatherData: StateFlow<WeatherData> = weatherRepository.cachedWeather
-        .stateIn(viewModelScope, SharingStarted.Eagerly, WeatherData())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), WeatherData())
 
     fun hasLocationPermission(): Boolean = weatherRepository.hasLocationPermission()
 
@@ -110,23 +105,23 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     val triggerConfig: StateFlow<TriggerConfig> = triggerRepository.config
-        .stateIn(viewModelScope, SharingStarted.Eagerly, TriggerConfig())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TriggerConfig())
 
     val headerConfig: StateFlow<HeaderConfig> = headerPreferencesRepository.headerConfig
-        .stateIn(viewModelScope, SharingStarted.Eagerly, HeaderConfig())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HeaderConfig())
 
     val homeWidgetSlot: StateFlow<WidgetSlotEntity?> = database.widgetSlotDao()
         .observeAll()
         .map { slots -> slots.firstOrNull { it.slotId == HOME_WIDGET_SLOT_ID } }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     val secondaryWidgetSlots: StateFlow<List<WidgetSlotEntity>> = database.widgetSlotDao()
         .observeAll()
         .map { slots -> slots.filter { it.slotId != HOME_WIDGET_SLOT_ID && it.appWidgetId != null } }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val quickActionConfig: StateFlow<QuickActionConfig> = quickActionRepository.config
-        .stateIn(viewModelScope, SharingStarted.Eagerly, QuickActionConfig())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), QuickActionConfig())
 
     val allInstalledApps: StateFlow<List<AppInfo>> = appRepository.apps
 
@@ -135,7 +130,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             if (config.actionType == QuickActionType.APP && config.componentKey.isNotEmpty()) {
                 apps.find { it.componentKey == config.componentKey }
             } else null
-        }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     private val hiddenKeysFlow: Flow<Set<String>> =
         database.hiddenAppDao().observeAll()
@@ -162,28 +157,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun refreshDefaultLauncherState() {
-        val app = getApplication<Application>()
-        val isDefault = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val roleManager = app.getSystemService(RoleManager::class.java)
-            roleManager?.isRoleHeld(RoleManager.ROLE_HOME) ?: false
-        } else {
-            val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-            val resolveInfo = app.packageManager.resolveActivity(intent, 0)
-            resolveInfo?.activityInfo?.packageName == app.packageName
+        viewModelScope.launch(Dispatchers.IO) {
+            _isDefaultLauncher.value = onboardingRepository.isDefaultLauncher()
         }
-        _isDefaultLauncher.value = isDefault
     }
 
-    fun buildSetDefaultIntent(): Intent {
-        val app = getApplication<Application>()
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val roleManager = app.getSystemService(RoleManager::class.java)
-            roleManager?.createRequestRoleIntent(RoleManager.ROLE_HOME)
-                ?: Intent(Settings.ACTION_HOME_SETTINGS)
-        } else {
-            Intent(Settings.ACTION_HOME_SETTINGS)
-        }
-    }
+    fun buildSetDefaultIntent(): Intent = onboardingRepository.createSetDefaultIntent()
 
     fun setHeaderMode(mode: HeaderMode) {
         viewModelScope.launch { headerPreferencesRepository.setHeaderMode(mode) }

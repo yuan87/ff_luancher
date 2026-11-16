@@ -9,7 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.CalendarContract
-import android.util.Log
+import com.ff.launcher.util.Logger
 import android.view.View
 import android.widget.RemoteViews
 import com.ff.launcher.R
@@ -36,7 +36,7 @@ class CalendarWidgetProvider : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray,
     ) {
-        Log.i("CalendarWidgetProvider", "onUpdate called for ${appWidgetIds.size} widgets")
+        Logger.i("CalendarWidgetProvider") { "onUpdate called for ${appWidgetIds.size} widgets" }
         val pendingResult = goAsync()
         scope.launch {
             try {

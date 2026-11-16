@@ -216,6 +216,7 @@
     <string name="notification_relative_days">%dd ago</string>
     <string name="notification_generic_new">New notification</string>
     <string name="notification_generic_hidden">Hidden content</string>
+    <string name="notification_generic_title">Notification</string>
     <string name="notification_count_label">%d notification</string>
     <string name="notification_counts_label">%d notifications</string>
 

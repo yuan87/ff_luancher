@@ -8,7 +8,8 @@ import android.os.Build
 import android.os.UserManager
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import android.util.Log
+import com.ff.launcher.util.Logger
+import com.ff.launcher.R
 import java.lang.ref.WeakReference
 
 /**
@@ -47,7 +48,7 @@ class BadgeNotificationListener : NotificationListenerService() {
             runCatching {
                 requestRebind(ComponentName(this, BadgeNotificationListener::class.java))
             }.onFailure {
-                Log.w(TAG, "Failed to requestRebind for notification listener")
+                Logger.w(TAG, "Failed to requestRebind for notification listener")
             }
         }
     }
@@ -178,14 +179,18 @@ class BadgeNotificationListener : NotificationListenerService() {
             val displayTitle: String
             val displayText: String
 
+            val genericNew = getString(R.string.notification_generic_new)
+            val genericTitle = getString(R.string.notification_generic_title)
+            val genericHidden = getString(R.string.notification_generic_hidden)
+
             if (hideMessageText) {
-                displayTitle = rawTitle.ifBlank { "New notification" }
-                displayText = "New notification"
+                displayTitle = rawTitle.ifBlank { genericNew }
+                displayText = genericNew
             } else if (isSecret) {
-                displayTitle = rawTitle.ifBlank { "Notification" }
-                displayText = "Hidden content"
+                displayTitle = rawTitle.ifBlank { genericTitle }
+                displayText = genericHidden
             } else {
-                displayTitle = rawTitle.ifBlank { "Notification" }
+                displayTitle = rawTitle.ifBlank { genericTitle }
                 displayText = rawText
             }
 
@@ -228,7 +233,7 @@ class BadgeNotificationListener : NotificationListenerService() {
                     runCatching {
                         markReadAction.actionIntent.send()
                     }.onFailure {
-                        Log.w(TAG, "Failed to invoke mark-as-read PendingIntent")
+                        Logger.w(TAG, "Failed to invoke mark-as-read PendingIntent")
                     }
                 }
             }
@@ -237,7 +242,7 @@ class BadgeNotificationListener : NotificationListenerService() {
         runCatching {
             cancelNotification(key)
         }.onFailure {
-            Log.w(TAG, "Failed to cancelNotification for key")
+            Logger.w(TAG, "Failed to cancelNotification for key")
         }
     }
 
@@ -263,7 +268,7 @@ class BadgeNotificationListener : NotificationListenerService() {
                     runCatching {
                         markReadAction.actionIntent.send()
                     }.onFailure {
-                        Log.w(TAG, "Failed to invoke mark-as-read PendingIntent in clearAll")
+                        Logger.w(TAG, "Failed to invoke mark-as-read PendingIntent in clearAll")
                     }
                 }
             }

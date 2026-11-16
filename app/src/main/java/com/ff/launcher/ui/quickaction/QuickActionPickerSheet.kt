@@ -1,6 +1,6 @@
 package com.ff.launcher.ui.quickaction
 
-import android.util.Log
+import com.ff.launcher.util.Logger
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -136,7 +136,7 @@ fun QuickActionPickerSheet(
                             .clip(RoundedCornerShape(16.dp))
                             .clickable {
                                 haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                Log.i("FF/QuickActionPicker", "Selected preset: ${preset.type}")
+                                Logger.i(TAG) { "Selected preset: ${preset.type}" }
                                 onSelectAction(preset.type, "", preset.label)
                                 onDismiss()
                             },
@@ -230,7 +230,7 @@ fun QuickActionPickerSheet(
                             .clip(RoundedCornerShape(12.dp))
                             .clickable {
                                 haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                Log.i("FF/QuickActionPicker", "Selected app: ${app.componentKey} (${app.label})")
+                                Logger.i(TAG) { "Selected app: ${app.componentKey} (${app.label})" }
                                 onSelectAction(QuickActionType.APP, app.componentKey, app.label)
                                 onDismiss()
                             },
@@ -306,3 +306,5 @@ private data class PresetItem(
     val label: String,
     val icon: ImageVector,
 )
+
+private const val TAG = "QuickActionPicker"

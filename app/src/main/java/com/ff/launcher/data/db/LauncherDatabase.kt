@@ -173,7 +173,6 @@ abstract class LauncherDatabase : RoomDatabase() {
                     "launcher.db",
                 )
                     .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
-                    .fallbackToDestructiveMigration(true)
                     .build().also { instance = it }
             }
     }
@@ -193,12 +192,22 @@ val SLOT_WEIGHT_SMALL = SLOT_FRACTION_SMALL
 val SLOT_WEIGHT_MEDIUM = SLOT_FRACTION_MEDIUM
 val SLOT_WEIGHT_LARGE = SLOT_FRACTION_LARGE
 
-fun normalizeSlotFraction(weight: Float): Float {
-    return when {
-        weight <= 0.26f || (weight > 1f && weight <= 2.5f) -> SLOT_FRACTION_SMALL
-        weight >= 0.29f || weight >= 3.8f -> SLOT_FRACTION_LARGE
-        else -> SLOT_FRACTION_MEDIUM
-    }
+/**
+ * Snaps an arbitrary [weight] value to the nearest canonical slot fraction:
+ * [SLOT_FRACTION_SMALL] (25%), [SLOT_FRACTION_MEDIUM] (27.5%), or [SLOT_FRACTION_LARGE] (30%).
+ *
+ * Decision boundaries:
+ * - weight ≤ 0.26  →  SMALL  (25%)
+ * - 0.26 < weight < 0.29  →  MEDIUM (27.5%)
+ * - weight ≥ 0.29  →  LARGE  (30%)
+ *
+ * Legacy values > 1.0 (from the Phase 1 integer-weight scheme) are mapped to SMALL.
+ */
+fun normalizeSlotFraction(weight: Float): Float = when {
+    weight > 1f -> SLOT_FRACTION_SMALL
+    weight >= 0.29f -> SLOT_FRACTION_LARGE
+    weight > 0.26f -> SLOT_FRACTION_MEDIUM
+    else -> SLOT_FRACTION_SMALL
 }
 
 /** Slot 0 is reserved for the primary Home Screen widget (or default smart clock when null). */

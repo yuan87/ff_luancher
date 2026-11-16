@@ -7,7 +7,7 @@ import android.content.pm.PackageManager
 import android.database.Cursor
 import android.net.Uri
 import android.provider.CalendarContract
-import android.util.Log
+import com.ff.launcher.util.Logger
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -107,7 +107,7 @@ class CalendarProvider(private val context: Context) {
                     )
                 }
             }
-        }.onFailure { Log.w("CalendarProvider", "Failed to query calendar events", it) }
+        }.onFailure { Logger.w("CalendarProvider", "Failed to query calendar events", it) }
 
         CalendarState(
             hasPermission = true,

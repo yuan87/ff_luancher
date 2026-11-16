@@ -15,6 +15,10 @@ import kotlinx.coroutines.flow.stateIn
 /**
  * In-memory app-scoped store holding eligible notification keys mapped per [BadgeKey].
  * Counts and message bodies are never written to disk or logged.
+ *
+ * The debounced flow uses [SharingStarted.WhileSubscribed] so the
+ * debounce coroutine stops collecting when no UI observer is active (e.g., the
+ * listener is disconnected and the ViewModel stops collecting).
  */
 @OptIn(FlowPreview::class)
 object NotificationBadgeStore {
@@ -31,7 +35,7 @@ object NotificationBadgeStore {
     val badgeKeys: StateFlow<Map<BadgeKey, Set<String>>> = _rawKeys
         .debounce(200L)
         .distinctUntilChanged()
-        .stateIn(scope, SharingStarted.Eagerly, emptyMap())
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     fun setConnected(connected: Boolean) {
         _isConnected.value = connected

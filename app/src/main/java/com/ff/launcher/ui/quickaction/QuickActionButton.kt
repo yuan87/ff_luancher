@@ -1,6 +1,6 @@
 package com.ff.launcher.ui.quickaction
 
-import android.util.Log
+import com.ff.launcher.util.Logger
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -123,7 +123,7 @@ fun QuickActionButton(
                     detectVerticalDragGestures(
                         onDragStart = {
                             haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            Log.d(TAG, "Vertical drag started at bias=${config.verticalBias}")
+                            Logger.d(TAG) { "Vertical drag started at bias=${config.verticalBias}" }
                         },
                         onVerticalDrag = { change, dragAmount ->
                             change.consume()
@@ -133,11 +133,11 @@ fun QuickActionButton(
                             onPreviewVerticalBias(newBias)
                         },
                         onDragEnd = {
-                            Log.i(TAG, "Vertical drag committed at bias=${config.verticalBias}")
+                            Logger.i(TAG) { "Vertical drag committed at bias=${config.verticalBias}" }
                             onCommitVerticalBias(config.verticalBias)
                         },
                         onDragCancel = {
-                            Log.d(TAG, "Vertical drag cancelled")
+                            Logger.d(TAG) { "Vertical drag cancelled" }
                             onCommitVerticalBias(config.verticalBias)
                         },
                     )
@@ -145,12 +145,12 @@ fun QuickActionButton(
                 .combinedClickable(
                     onClick = {
                         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        Log.i(TAG, "Tapped quick action: ${config.actionType}")
+                        Logger.i(TAG) { "Tapped quick action: ${config.actionType}" }
                         onExecute()
                     },
                     onLongClick = {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        Log.i(TAG, "Long clicked quick action: open customization")
+                        Logger.i(TAG) { "Long clicked quick action: open customization" }
                         onCustomize()
                     },
                 ),

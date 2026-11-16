@@ -7,7 +7,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.provider.AlarmClock
-import android.util.Log
+import com.ff.launcher.util.Logger
 import android.widget.RemoteViews
 import com.ff.launcher.R
 
@@ -23,7 +23,7 @@ class ClockWidgetProvider : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray,
     ) {
-        Log.i("ClockWidgetProvider", "onUpdate called for ${appWidgetIds.size} widgets")
+        Logger.i("ClockWidgetProvider") { "onUpdate called for ${appWidgetIds.size} widgets" }
         for (appWidgetId in appWidgetIds) {
             updateClockWidget(context, appWidgetManager, appWidgetId)
         }
