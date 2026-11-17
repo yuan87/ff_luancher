@@ -46,7 +46,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -247,9 +246,10 @@ fun QuickActionPickerSheet(
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 modifier = Modifier.weight(1f),
                             ) {
-                                if (app.icon != null) {
+                                val bitmap = app.iconBitmap
+                                if (bitmap != null) {
                                     Image(
-                                        bitmap = app.icon.asImageBitmap(),
+                                        bitmap = bitmap,
                                         contentDescription = null,
                                         modifier = Modifier.size(36.dp),
                                     )

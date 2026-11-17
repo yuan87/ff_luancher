@@ -2,6 +2,9 @@ package com.ff.launcher.data
 
 import android.graphics.Bitmap
 import android.os.UserHandle
+import androidx.compose.runtime.Immutable
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import com.ff.launcher.notification.BadgeKey
 
 /**
@@ -22,6 +25,7 @@ import com.ff.launcher.notification.BadgeKey
  *   [android.content.pm.LauncherApps.startMainActivity], never a bare [android.content.Intent].
  * @param userSerial Cached user serial parsed from [componentKey] to avoid per-row Binder IPC.
  */
+@Immutable
 class AppInfo(
     val label: String,
     val packageName: String,
@@ -31,7 +35,13 @@ class AppInfo(
     val firstInstallTime: Long = 0L,
     val userSerial: Long = componentKey.substringAfterLast(PROFILE_KEY_SEPARATOR, "0").toLongOrNull() ?: 0L,
 ) {
-    val badgeKey: BadgeKey by lazy { BadgeKey(packageName, userSerial) }
+    val badgeKey: BadgeKey by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        BadgeKey(packageName, userSerial)
+    }
+
+    val iconBitmap: ImageBitmap? by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        icon?.asImageBitmap()
+    }
 
     override fun equals(other: Any?): Boolean =
         this === other || (other is AppInfo && componentKey == other.componentKey)

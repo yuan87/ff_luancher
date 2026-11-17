@@ -87,12 +87,14 @@ class MainActivity : ComponentActivity() {
         // Ensure this home launcher task is never retained in the recent apps carousel,
         // and clean up any transient AppEntryActivity trampoline task, while preserving
         // the standalone SettingsActivity so the user can switch back to it via Recent Apps:
+        val am = getSystemService(ActivityManager::class.java)
+        val currentTaskId = taskId
+        val entryClassName = AppEntryActivity::class.java.name
         lifecycleScope.launch(Dispatchers.Default) {
-            val am = getSystemService(ActivityManager::class.java)
             am?.appTasks?.forEach { appTask ->
                 val info = runCatching { appTask.taskInfo }.getOrNull()
-                if (info != null && info.taskId != taskId) {
-                    if (info.baseIntent.component?.className == AppEntryActivity::class.java.name) {
+                if (info != null && info.taskId != currentTaskId) {
+                    if (info.baseIntent.component?.className == entryClassName) {
                         runCatching { appTask.finishAndRemoveTask() }
                     }
                 } else {

@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -75,7 +76,7 @@ class AppRepository(
     val packageEvents: SharedFlow<PackageEvent> = _packageEvents.asSharedFlow()
 
     /** Delayed removal verifications in flight, keyed by package+user (update-safe). */
-    private val pendingRemovalVerifications = mutableMapOf<Pair<String, UserHandle>, Job>()
+    private val pendingRemovalVerifications = ConcurrentHashMap<Pair<String, UserHandle>, Job>()
 
     private var packageReceiver: BroadcastReceiver? = null
     private var configurationReceiver: BroadcastReceiver? = null

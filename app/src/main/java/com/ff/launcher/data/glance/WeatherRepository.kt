@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -256,27 +257,27 @@ class WeatherRepository(private val context: Context) {
         lon: Double,
         isActualLocation: Boolean,
     ): WeatherData? = withContext(Dispatchers.IO) {
+        val urlString = "https://api.open-meteo.com/v1/forecast?" +
+            "latitude=$lat&longitude=$lon" +
+            "&current=temperature_2m,weather_code" +
+            "&daily=weather_code,temperature_2m_max,temperature_2m_min" +
+            "&timezone=auto"
+
+        val conn = runCatching {
+            (URL(urlString).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 8000
+                readTimeout = 8000
+                requestMethod = "GET"
+            }
+        }.getOrNull() ?: return@withContext null
+
         try {
-            val urlString = "https://api.open-meteo.com/v1/forecast?" +
-                "latitude=$lat&longitude=$lon" +
-                "&current=temperature_2m,weather_code" +
-                "&daily=weather_code,temperature_2m_max,temperature_2m_min" +
-                "&timezone=auto"
-
-            val url = URL(urlString)
-            val conn = url.openConnection() as HttpURLConnection
-            conn.connectTimeout = 8000
-            conn.readTimeout = 8000
-            conn.requestMethod = "GET"
-
             if (conn.responseCode != 200) {
                 Logger.w(TAG, "Open-Meteo returned HTTP ${conn.responseCode}")
                 return@withContext null
             }
 
-            val reader = BufferedReader(InputStreamReader(conn.inputStream))
-            val jsonText = reader.readText()
-            reader.close()
+            val jsonText = conn.inputStream.bufferedReader().use { it.readText() }
 
             val root = JSONObject(jsonText)
             val currentObj = root.getJSONObject("current")
@@ -297,19 +298,21 @@ class WeatherRepository(private val context: Context) {
                 try {
                     if (Geocoder.isPresent()) {
                         val geocoder = Geocoder(context, Locale.getDefault())
-                        val locality = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            suspendCancellableCoroutine { continuation ->
-                                geocoder.getFromLocation(lat, lon, 1) { addresses ->
-                                    val address = addresses.firstOrNull()
-                                    val loc = address?.locality ?: address?.subAdminArea ?: address?.adminArea
-                                    if (continuation.isActive) continuation.resume(loc)
+                        val locality = withTimeoutOrNull(3_000L) {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                suspendCancellableCoroutine { continuation ->
+                                    geocoder.getFromLocation(lat, lon, 1) { addresses ->
+                                        val address = addresses.firstOrNull()
+                                        val loc = address?.locality ?: address?.subAdminArea ?: address?.adminArea
+                                        if (continuation.isActive) continuation.resume(loc)
+                                    }
                                 }
+                            } else {
+                                @Suppress("DEPRECATION")
+                                val addresses = geocoder.getFromLocation(lat, lon, 1)
+                                val address = addresses?.firstOrNull()
+                                address?.locality ?: address?.subAdminArea ?: address?.adminArea
                             }
-                        } else {
-                            @Suppress("DEPRECATION")
-                            val addresses = geocoder.getFromLocation(lat, lon, 1)
-                            val address = addresses?.firstOrNull()
-                            address?.locality ?: address?.subAdminArea ?: address?.adminArea
                         }
                         if (!locality.isNullOrBlank()) {
                             locName = locality
@@ -334,6 +337,8 @@ class WeatherRepository(private val context: Context) {
         } catch (t: Throwable) {
             Logger.w(TAG, "Weather fetch error", t)
             null
+        } finally {
+            conn.disconnect()
         }
     }
 

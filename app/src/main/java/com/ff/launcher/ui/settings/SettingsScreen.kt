@@ -74,7 +74,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -1348,10 +1347,10 @@ fun SettingsScreen(
                                             modifier = Modifier.size(24.dp),
                                         )
                                         QuickActionType.APP -> {
-                                            val targetIcon = quickActionTargetApp?.icon
-                                            if (targetIcon != null) {
+                                            val targetBitmap = quickActionTargetApp?.iconBitmap
+                                            if (targetBitmap != null) {
                                                 Image(
-                                                    bitmap = targetIcon.asImageBitmap(),
+                                                    bitmap = targetBitmap,
                                                     contentDescription = null,
                                                     modifier = Modifier.size(28.dp),
                                                 )

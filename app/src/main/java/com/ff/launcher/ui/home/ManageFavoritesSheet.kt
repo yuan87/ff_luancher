@@ -75,7 +75,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -887,10 +886,10 @@ private fun TargetAppQuickCard(
 
 @Composable
 private fun AppIconImage(app: AppInfo, size: Int) {
-    val icon = app.icon
-    if (icon != null) {
+    val bitmap = app.iconBitmap
+    if (bitmap != null) {
         Image(
-            bitmap = remember(icon) { icon.asImageBitmap() },
+            bitmap = bitmap,
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier

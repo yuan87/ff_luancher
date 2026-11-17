@@ -6,6 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
+import android.os.Handler
+import android.os.Looper
 import android.provider.AlarmClock
 import android.provider.MediaStore
 import com.ff.launcher.util.Logger
@@ -41,6 +43,7 @@ class QuickActionManager(
     private val userMessages: MutableSharedFlow<String>,
 ) {
     private val cameraManager = application.getSystemService(Context.CAMERA_SERVICE) as? CameraManager
+    private var torchCameraId: String? = null
 
     private val _isFlashlightOn = MutableStateFlow(false)
     val isFlashlightOn: StateFlow<Boolean> = _isFlashlightOn.asStateFlow()
@@ -59,15 +62,36 @@ class QuickActionManager(
     private val torchCallback = object : CameraManager.TorchCallback() {
         override fun onTorchModeChanged(cameraId: String, enabled: Boolean) {
             Logger.d(TAG) { "onTorchModeChanged: cameraId=$cameraId, enabled=$enabled" }
-            _isFlashlightOn.value = enabled
+            if (cameraId == torchCameraId || torchCameraId == null) {
+                torchCameraId = cameraId
+                _isFlashlightOn.value = enabled
+            }
+        }
+
+        override fun onTorchModeUnavailable(cameraId: String) {
+            Logger.d(TAG) { "onTorchModeUnavailable: cameraId=$cameraId" }
+            if (cameraId == torchCameraId) {
+                _isFlashlightOn.value = false
+            }
         }
     }
 
     init {
         runCatching {
-            cameraManager?.registerTorchCallback(torchCallback, null)
-            Logger.i(TAG) { "Registered torch callback" }
+            torchCameraId = findFlashCameraId()
+            cameraManager?.registerTorchCallback(torchCallback, Handler(Looper.getMainLooper()))
+            Logger.i(TAG) { "Registered torch callback for cameraId=$torchCameraId" }
         }.onFailure { Logger.w(TAG, "Failed to register torch callback", it) }
+    }
+
+    private fun findFlashCameraId(): String? {
+        val cm = cameraManager ?: return null
+        return runCatching {
+            cm.cameraIdList.firstOrNull { id ->
+                val chars = cm.getCameraCharacteristics(id)
+                chars.get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+            } ?: cm.cameraIdList.firstOrNull()
+        }.getOrNull()
     }
 
     fun openQuickActionPicker() {
@@ -146,10 +170,8 @@ class QuickActionManager(
     fun toggleFlashlight() {
         val cm = cameraManager ?: return
         runCatching {
-            val cameraId = cm.cameraIdList.firstOrNull { id ->
-                val chars = cm.getCameraCharacteristics(id)
-                chars.get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
-            } ?: cm.cameraIdList.firstOrNull() ?: return
+            val cameraId = torchCameraId ?: findFlashCameraId() ?: return
+            torchCameraId = cameraId
             val target = !_isFlashlightOn.value
             Logger.i(TAG) { "toggleFlashlight: target=$target, cameraId=$cameraId" }
             cm.setTorchMode(cameraId, target)
@@ -215,6 +237,13 @@ class QuickActionManager(
         runCatching {
             cameraManager?.unregisterTorchCallback(torchCallback)
             Logger.i(TAG) { "Unregistered torch callback" }
+        }
+        if (_isFlashlightOn.value) {
+            val id = torchCameraId
+            if (id != null) {
+                runCatching { cameraManager?.setTorchMode(id, false) }
+            }
+            _isFlashlightOn.value = false
         }
     }
 

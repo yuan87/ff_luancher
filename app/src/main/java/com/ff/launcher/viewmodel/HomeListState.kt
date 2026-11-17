@@ -3,9 +3,15 @@ package com.ff.launcher.viewmodel
 import androidx.compose.runtime.Immutable
 import com.ff.launcher.data.AppInfo
 
+@Immutable
 sealed interface HomeRow {
+    @Immutable
     data class AppRow(val app: AppInfo, val isFavorite: Boolean) : HomeRow
+
+    @Immutable
     data class Header(val label: String) : HomeRow
+
+    @Immutable
     data object Divider : HomeRow
 }
 

@@ -61,7 +61,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -381,10 +380,10 @@ private fun AppGridItem(
             .padding(vertical = 6.dp, horizontal = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        val icon = app.icon
-        if (icon != null) {
+        val bitmap = app.iconBitmap
+        if (bitmap != null) {
             Image(
-                bitmap = remember(icon) { icon.asImageBitmap() },
+                bitmap = bitmap,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
@@ -457,10 +456,10 @@ private fun SearchResultRow(
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            val icon = app.icon
-            if (icon != null) {
+            val bitmap = app.iconBitmap
+            if (bitmap != null) {
                 Image(
-                    bitmap = remember(icon) { icon.asImageBitmap() },
+                    bitmap = bitmap,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier

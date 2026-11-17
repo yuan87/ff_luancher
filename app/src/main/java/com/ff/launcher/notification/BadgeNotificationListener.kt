@@ -159,6 +159,13 @@ class BadgeNotificationListener : NotificationListenerService() {
         val includeSilent = NotificationBadgeStore.includeSilent
 
         val cards = mutableListOf<NotificationCard>()
+        val genericNew = getString(R.string.notification_generic_new)
+        val genericTitle = getString(R.string.notification_generic_title)
+        val genericHidden = getString(R.string.notification_generic_hidden)
+        val appName = runCatching {
+            val pm = applicationContext.packageManager
+            pm.getApplicationLabel(pm.getApplicationInfo(packageName, 0)).toString()
+        }.getOrNull()?.ifBlank { null } ?: genericTitle
 
         for (sbn in active) {
             if (sbn.packageName != packageName) continue
@@ -179,12 +186,8 @@ class BadgeNotificationListener : NotificationListenerService() {
             val displayTitle: String
             val displayText: String
 
-            val genericNew = getString(R.string.notification_generic_new)
-            val genericTitle = getString(R.string.notification_generic_title)
-            val genericHidden = getString(R.string.notification_generic_hidden)
-
             if (hideMessageText) {
-                displayTitle = rawTitle.ifBlank { genericNew }
+                displayTitle = appName
                 displayText = genericNew
             } else if (isSecret) {
                 displayTitle = rawTitle.ifBlank { genericTitle }
@@ -194,10 +197,7 @@ class BadgeNotificationListener : NotificationListenerService() {
                 displayText = rawText
             }
 
-            val hasMarkRead = notif.actions?.any { action ->
-                (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && action.semanticAction == Notification.Action.SEMANTIC_ACTION_MARK_AS_READ) ||
-                    action.title?.toString()?.contains("read", ignoreCase = true) == true
-            } == true
+            val hasMarkRead = findMarkAsReadAction(notif) != null
 
             cards.add(
                 NotificationCard(
@@ -225,15 +225,13 @@ class BadgeNotificationListener : NotificationListenerService() {
             val active = runCatching { activeNotifications }.getOrNull()
             val sbn = active?.firstOrNull { it.key == key }
             if (sbn != null) {
-                val markReadAction = sbn.notification?.actions?.firstOrNull { action ->
-                    (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && action.semanticAction == Notification.Action.SEMANTIC_ACTION_MARK_AS_READ) ||
-                        action.title?.toString()?.contains("read", ignoreCase = true) == true
-                }
-                if (markReadAction != null) {
-                    runCatching {
-                        markReadAction.actionIntent.send()
-                    }.onFailure {
-                        Logger.w(TAG, "Failed to invoke mark-as-read PendingIntent")
+                sbn.notification?.let { notif ->
+                    findMarkAsReadAction(notif)?.let { action ->
+                        runCatching {
+                            action.actionIntent.send()
+                        }.onFailure {
+                            Logger.w(TAG, "Failed to invoke mark-as-read PendingIntent", it)
+                        }
                     }
                 }
             }
@@ -242,7 +240,7 @@ class BadgeNotificationListener : NotificationListenerService() {
         runCatching {
             cancelNotification(key)
         }.onFailure {
-            Logger.w(TAG, "Failed to cancelNotification for key")
+            Logger.w(TAG, "Failed to cancelNotification for key", it)
         }
     }
 
@@ -251,24 +249,25 @@ class BadgeNotificationListener : NotificationListenerService() {
      */
     fun clearAllForApp(packageName: String, userSerial: Long, markAsRead: Boolean) {
         val active = runCatching { activeNotifications }.getOrNull() ?: return
+        val ranking = runCatching { currentRanking }.getOrNull()
         val userManager = getSystemService(Context.USER_SERVICE) as? UserManager
+        val includeSilent = NotificationBadgeStore.includeSilent
         val keysToCancel = mutableListOf<String>()
 
         for (sbn in active) {
             if (sbn.packageName != packageName) continue
             val sbnSerial = userManager?.getSerialNumberForUser(sbn.user) ?: 0L
             if (sbnSerial != userSerial) continue
+            if (!isEligibleNotification(sbn, active, ranking, includeSilent)) continue
 
             if (markAsRead) {
-                val markReadAction = sbn.notification?.actions?.firstOrNull { action ->
-                    (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && action.semanticAction == Notification.Action.SEMANTIC_ACTION_MARK_AS_READ) ||
-                        action.title?.toString()?.contains("read", ignoreCase = true) == true
-                }
-                if (markReadAction != null) {
-                    runCatching {
-                        markReadAction.actionIntent.send()
-                    }.onFailure {
-                        Logger.w(TAG, "Failed to invoke mark-as-read PendingIntent in clearAll")
+                sbn.notification?.let { notif ->
+                    findMarkAsReadAction(notif)?.let { action ->
+                        runCatching {
+                            action.actionIntent.send()
+                        }.onFailure {
+                            Logger.w(TAG, "Failed to invoke mark-as-read PendingIntent in clearAll", it)
+                        }
                     }
                 }
             }
@@ -284,8 +283,26 @@ class BadgeNotificationListener : NotificationListenerService() {
         }
     }
 
+    private fun findMarkAsReadAction(notification: Notification): Notification.Action? {
+        val actions = notification.actions ?: return null
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            actions.firstOrNull {
+                it.semanticAction == Notification.Action.SEMANTIC_ACTION_MARK_AS_READ &&
+                    it.actionIntent != null
+            }?.let { return it }
+        }
+        return actions.firstOrNull { action ->
+            val title = action.title?.toString() ?: return@firstOrNull false
+            action.actionIntent != null && MARK_READ_REGEX.containsMatchIn(title)
+        }
+    }
+
     companion object {
         private const val TAG = "BadgeListener"
+        private val MARK_READ_REGEX = Regex(
+            pattern = """\b(mark\s+as\s+read|mark\s+read|read)\b|已读|標示為已讀|標為已讀""",
+            option = RegexOption.IGNORE_CASE,
+        )
         private var instanceRef: WeakReference<BadgeNotificationListener>? = null
 
         fun getInstance(): BadgeNotificationListener? = instanceRef?.get()
