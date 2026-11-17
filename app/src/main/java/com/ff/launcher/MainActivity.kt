@@ -16,6 +16,7 @@ import com.ff.launcher.ui.LauncherRoot
 import com.ff.launcher.ui.theme.FFLauncherTheme
 import com.ff.launcher.viewmodel.LauncherViewModel
 import com.ff.launcher.viewmodel.WidgetRequest
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -68,8 +69,6 @@ class MainActivity : ComponentActivity() {
         Logger.d(TAG) { "onActivityResult: requestCode=$requestCode, resultCode=$resultCode" }
         if (requestCode == REQUEST_CONFIGURE_WIDGET) {
             viewModel.onWidgetConfigureResult(resultCode, data)
-        } else if (requestCode == REQUEST_BIND_WIDGET) {
-            viewModel.onBindPermissionResult(resultCode, data)
         }
     }
 
@@ -80,7 +79,6 @@ class MainActivity : ComponentActivity() {
         const val ACTION_OPEN_WIDGET_DECK = "com.ff.launcher.action.OPEN_WIDGET_DECK"
         const val EXTRA_OPEN_SECOND_SCREEN = "com.ff.launcher.extra.OPEN_SECOND_SCREEN"
         private const val REQUEST_CONFIGURE_WIDGET = 1001
-        private const val REQUEST_BIND_WIDGET = 1002
     }
 
     override fun onResume() {
@@ -89,15 +87,17 @@ class MainActivity : ComponentActivity() {
         // Ensure this home launcher task is never retained in the recent apps carousel,
         // and clean up any transient AppEntryActivity trampoline task, while preserving
         // the standalone SettingsActivity so the user can switch back to it via Recent Apps:
-        val am = getSystemService(ActivityManager::class.java)
-        am?.appTasks?.forEach { appTask ->
-            val info = runCatching { appTask.taskInfo }.getOrNull()
-            if (info != null && info.taskId != taskId) {
-                if (info.baseIntent.component?.className == AppEntryActivity::class.java.name) {
-                    runCatching { appTask.finishAndRemoveTask() }
+        lifecycleScope.launch(Dispatchers.Default) {
+            val am = getSystemService(ActivityManager::class.java)
+            am?.appTasks?.forEach { appTask ->
+                val info = runCatching { appTask.taskInfo }.getOrNull()
+                if (info != null && info.taskId != taskId) {
+                    if (info.baseIntent.component?.className == AppEntryActivity::class.java.name) {
+                        runCatching { appTask.finishAndRemoveTask() }
+                    }
+                } else {
+                    runCatching { appTask.setExcludeFromRecents(true) }
                 }
-            } else {
-                runCatching { appTask.setExcludeFromRecents(true) }
             }
         }
         viewModel.setHostResumed(true)

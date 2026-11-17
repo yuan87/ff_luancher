@@ -1,7 +1,7 @@
 package com.ff.launcher.viewmodel
 
+import androidx.compose.runtime.Immutable
 import com.ff.launcher.util.Logger
-import com.ff.launcher.data.AppInfo
 import com.ff.launcher.data.notification.BadgePreferences
 import com.ff.launcher.data.notification.BadgePreferencesRepository
 import com.ff.launcher.data.notification.BadgeScope
@@ -16,6 +16,23 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+
+/**
+ * Snapshot of badge state and preferences evaluated for reactive Compose rendering.
+ */
+@Immutable
+data class BadgeEvaluationState(
+    val prefs: BadgePreferences = BadgePreferences(),
+    val activeKeys: Map<BadgeKey, Set<String>> = emptyMap(),
+    val hasAccess: Boolean = false,
+) {
+    fun hasNotification(key: BadgeKey, isPinned: Boolean): Boolean {
+        if (!prefs.enabled || !hasAccess) return false
+        if (prefs.mutedPackages.contains(key.packageName)) return false
+        if (prefs.scope == BadgeScope.PINNED_ONLY && !isPinned) return false
+        return !activeKeys[key].isNullOrEmpty()
+    }
+}
 
 /**
  * Manages the expanded notification panel state and badge preferences.

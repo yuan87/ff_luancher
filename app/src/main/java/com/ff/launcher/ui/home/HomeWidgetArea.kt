@@ -92,14 +92,7 @@ fun HomeCustomWidgetView(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 4.dp, vertical = 6.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .combinedClickable(
-                onClick = {},
-                onLongClick = {
-                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    showSheet = true
-                },
-            ),
+            .clip(RoundedCornerShape(20.dp)),
     ) {
         if (hostView != null) {
             AndroidView(

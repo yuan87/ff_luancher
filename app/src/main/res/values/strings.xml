@@ -245,4 +245,12 @@
     <string name="slot_size_s">S · 25%</string>
     <string name="slot_size_m">M · 28%</string>
     <string name="slot_size_l">L · 30%</string>
+
+    <!-- RemoteViews & Accessibility -->
+    <string name="widget_tap_to_refresh_weather">Tap to refresh weather</string>
+    <string name="widget_temp_placeholder">--°</string>
+    <string name="widget_clock_date_format">EEEE, MMMM d</string>
+    <string name="a11y_move_widget_up">Move up</string>
+    <string name="a11y_move_widget_down">Move down</string>
+    <string name="edit_widgets_screen_usage">Screen usage: %1$d%% / 100%%</string>
 </resources>

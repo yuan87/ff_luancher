@@ -2,6 +2,7 @@ package com.ff.launcher.data
 
 import android.graphics.Bitmap
 import android.os.UserHandle
+import com.ff.launcher.notification.BadgeKey
 
 /**
  * A single launchable app on the device.
@@ -19,6 +20,7 @@ import android.os.UserHandle
  *   or null when the icon could not be loaded (a letter placeholder is rendered instead).
  * @param userHandle Owning user — work-profile apps are launched through
  *   [android.content.pm.LauncherApps.startMainActivity], never a bare [android.content.Intent].
+ * @param userSerial Cached user serial parsed from [componentKey] to avoid per-row Binder IPC.
  */
 class AppInfo(
     val label: String,
@@ -27,7 +29,10 @@ class AppInfo(
     val icon: Bitmap?,
     val userHandle: UserHandle,
     val firstInstallTime: Long = 0L,
+    val userSerial: Long = componentKey.substringAfterLast(PROFILE_KEY_SEPARATOR, "0").toLongOrNull() ?: 0L,
 ) {
+    val badgeKey: BadgeKey by lazy { BadgeKey(packageName, userSerial) }
+
     override fun equals(other: Any?): Boolean =
         this === other || (other is AppInfo && componentKey == other.componentKey)
 
@@ -44,7 +49,8 @@ class AppInfo(
         icon: Bitmap? = this.icon,
         userHandle: UserHandle = this.userHandle,
         firstInstallTime: Long = this.firstInstallTime,
-    ): AppInfo = AppInfo(label, packageName, componentKey, icon, userHandle, firstInstallTime)
+        userSerial: Long = this.userSerial,
+    ): AppInfo = AppInfo(label, packageName, componentKey, icon, userHandle, firstInstallTime, userSerial)
 
     companion object {
         const val PROFILE_KEY_SEPARATOR = "#"

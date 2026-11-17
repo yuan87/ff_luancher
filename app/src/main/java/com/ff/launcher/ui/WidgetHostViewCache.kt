@@ -25,25 +25,28 @@ private const val WIDGET_CACHE_IDLE_MS = 5 * 60_000L
  * View-cache lives in the composition (Activity context) and NOT in the ViewModel:
  * AppWidgetHostView/RemoteViews need an Activity context for PendingIntent launches (BAL),
  * themed inflation and collection widgets.
+ *
+ * Keyed by [appWidgetId] so slot reordering reuses live AppWidgetHostView instances
+ * across positional slots without tearing down and re-inflating views.
  */
 class WidgetHostViewCache(
     private val viewModel: LauncherViewModel,
     private val scope: CoroutineScope,
 ) {
-    val cache = mutableMapOf<Int, LauncherAppWidgetHostView>()
+    private val cacheByWidgetId = mutableMapOf<Int, LauncherAppWidgetHostView>()
+    private var homeAppWidgetId: Int? = null
     private var purgeJob: Job? = null
 
     fun obtain(context: Context, slotId: Int, appWidgetId: Int): LauncherAppWidgetHostView? {
-        cache[slotId]?.let { cached ->
-            if (cached.appWidgetId == appWidgetId) {
-                (cached.parent as? ViewGroup)?.removeView(cached)
-                return cached
-            }
+        if (slotId == HOME_WIDGET_SLOT_ID) {
+            homeAppWidgetId = appWidgetId
+        }
+        cacheByWidgetId[appWidgetId]?.let { cached ->
             (cached.parent as? ViewGroup)?.removeView(cached)
-            cache.remove(slotId)
+            return cached
         }
         return viewModel.createHostView(context, appWidgetId)?.also {
-            cache[slotId] = it
+            cacheByWidgetId[appWidgetId] = it
             viewModel.refreshWidgetListening()
         }
     }
@@ -53,15 +56,16 @@ class WidgetHostViewCache(
             purgeJob?.cancel()
             purgeJob = null
         } else {
-            cache.filterKeys { it != HOME_WIDGET_SLOT_ID }.values.forEach {
+            val homeId = homeAppWidgetId
+            cacheByWidgetId.filterKeys { it != homeId }.values.forEach {
                 it.setLayerType(View.LAYER_TYPE_NONE, null)
             }
             purgeJob?.cancel()
             purgeJob = scope.launch {
                 delay(WIDGET_CACHE_IDLE_MS)
-                val secondarySlotIds = cache.keys.filter { it != HOME_WIDGET_SLOT_ID }
-                secondarySlotIds.forEach { slotId ->
-                    cache.remove(slotId)?.let { v ->
+                val secondaryWidgetIds = cacheByWidgetId.keys.filter { it != homeAppWidgetId }
+                secondaryWidgetIds.forEach { widgetId ->
+                    cacheByWidgetId.remove(widgetId)?.let { v ->
                         (v.parent as? ViewGroup)?.removeView(v)
                     }
                 }
@@ -70,14 +74,13 @@ class WidgetHostViewCache(
     }
 
     fun pruneRemovedSlots(slots: List<WidgetSlotEntity>) {
-        val boundAppWidgetIds = slots
-            .filter { it.appWidgetId != null }
-            .associate { it.slotId to it.appWidgetId }
-        cache.entries.removeAll { entry ->
-            val stale = boundAppWidgetIds[entry.key] != entry.value.appWidgetId
+        homeAppWidgetId = slots.firstOrNull { it.slotId == HOME_WIDGET_SLOT_ID }?.appWidgetId
+        val activeWidgetIds = slots.mapNotNullTo(HashSet()) { it.appWidgetId }
+        cacheByWidgetId.entries.removeAll { (widgetId, view) ->
+            val stale = widgetId !in activeWidgetIds
             if (stale) {
-                (entry.value.parent as? ViewGroup)?.removeView(entry.value)
-                entry.value.setLayerType(View.LAYER_TYPE_NONE, null)
+                (view.parent as? ViewGroup)?.removeView(view)
+                view.setLayerType(View.LAYER_TYPE_NONE, null)
             }
             stale
         }

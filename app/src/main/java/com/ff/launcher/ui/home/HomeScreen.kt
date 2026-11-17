@@ -2,6 +2,7 @@ package com.ff.launcher.ui.home
 
 import android.content.Context
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -51,6 +52,7 @@ import com.ff.launcher.widget.LauncherAppWidgetHostView
 import kotlinx.coroutines.launch
 
 private const val TAG = "HomeScreen"
+private const val HEADER_ITEM_OFFSET = 1
 
 /**
  * Primary home screen, Niagara-style: collapsed state shows only pinned favorites;
@@ -62,6 +64,8 @@ private const val TAG = "HomeScreen"
 fun HomeScreen(
     state: HomeListState,
     listState: LazyListState,
+    maxHeight: androidx.compose.ui.unit.Dp,
+    extraTopPadding: androidx.compose.ui.unit.Dp = 0.dp,
     homeResetTrigger: Long = 0L,
     homeWidgetSlot: WidgetSlotEntity? = null,
     timeData: TimeData = TimeData(),
@@ -93,6 +97,7 @@ fun HomeScreen(
 ) {
     val scope = rememberCoroutineScope()
     var revealed by remember { mutableStateOf(false) }
+    var pendingScrollRowIndex by remember { mutableStateOf<Int?>(null) }
     val favListState = rememberLazyListState()
 
     LaunchedEffect(homeResetTrigger) {
@@ -100,8 +105,17 @@ fun HomeScreen(
             Logger.d(TAG) { "homeResetTrigger fired ($homeResetTrigger) -> folding full list back to favorites" }
             onCollapseNotifications()
             revealed = false
+            pendingScrollRowIndex = null
             runCatching { listState.scrollToItem(0) }
             runCatching { favListState.scrollToItem(0) }
+        }
+    }
+
+    LaunchedEffect(revealed, pendingScrollRowIndex) {
+        val targetRow = pendingScrollRowIndex
+        if (revealed && targetRow != null) {
+            pendingScrollRowIndex = null
+            runCatching { listState.scrollToItem(targetRow + HEADER_ITEM_OFFSET) }
         }
     }
 
@@ -186,11 +200,11 @@ fun HomeScreen(
     val listContentPadding = PaddingValues(
         start = 16.dp,
         end = 42.dp, // 34dp WaveScroller + 8dp breathing room = ~88% of screen width clickable
-        top = insets.calculateTopPadding() + 12.dp,
+        top = insets.calculateTopPadding() + 12.dp + extraTopPadding,
         bottom = insets.calculateBottomPadding() + 24.dp,
     )
 
-    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+    Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
             state = activeListState,
             modifier = Modifier
@@ -251,7 +265,7 @@ fun HomeScreen(
                     }
                 }
 
-                state.favoriteCount == 0 && state.favoriteKeys.isEmpty() && state.rows.isNotEmpty() -> {
+                state.favoriteRows.isEmpty() && state.rows.isNotEmpty() -> {
                     item(key = "empty_guide") {
                         EmptyFavoritesGuide(
                             onBrowseApps = {
@@ -266,9 +280,7 @@ fun HomeScreen(
 
                 else -> {
                     items(
-                        items = state.rows
-                            .takeWhile { it !is HomeRow.Header }
-                            .filterIsInstance<HomeRow.AppRow>(),
+                        items = state.favoriteRows,
                         key = { "fav_${it.app.componentKey}" },
                     ) { row ->
                         val app = row.app
@@ -300,7 +312,12 @@ fun HomeScreen(
             sectionLabels = sectionLabels,
             onSectionSelected = { sectionIndex ->
                 state.sections.getOrNull(sectionIndex)?.let { section ->
-                    scope.launch { listState.scrollToItem(section.rowIndex) }
+                    if (!revealed) {
+                        revealed = true
+                        pendingScrollRowIndex = section.rowIndex
+                    } else {
+                        scope.launch { listState.scrollToItem(section.rowIndex + HEADER_ITEM_OFFSET) }
+                    }
                 }
             },
             onSettingsSelected = onOpenSettings,

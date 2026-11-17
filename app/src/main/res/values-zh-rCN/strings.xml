@@ -245,4 +245,12 @@
     <string name="slot_size_s">小 · 25%</string>
     <string name="slot_size_m">中 · 28%</string>
     <string name="slot_size_l">大 · 30%</string>
+
+    <!-- RemoteViews & Accessibility -->
+    <string name="widget_tap_to_refresh_weather">点击刷新天气</string>
+    <string name="widget_temp_placeholder">--°</string>
+    <string name="widget_clock_date_format">M月d日 EEEE</string>
+    <string name="a11y_move_widget_up">上移</string>
+    <string name="a11y_move_widget_down">下移</string>
+    <string name="edit_widgets_screen_usage">屏幕占用: %1$d%% / 100%%</string>
 </resources>

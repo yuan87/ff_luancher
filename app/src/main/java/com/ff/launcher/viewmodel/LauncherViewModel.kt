@@ -13,6 +13,7 @@ import android.os.Process
 import android.os.UserManager
 import android.provider.Settings
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.ff.launcher.LauncherApp
 import com.ff.launcher.R
@@ -90,7 +91,10 @@ sealed interface WidgetRequest {
  * - [notificationPanelManager]: Notification badge filtering and inline expanded card panel
  * - [HomeStateBuilder]: Pure function building the locale-collated, Pinyin-rescued app list
  */
-class LauncherViewModel(application: Application) : AndroidViewModel(application) {
+class LauncherViewModel(
+    application: Application,
+    savedStateHandle: SavedStateHandle,
+) : AndroidViewModel(application) {
 
     private val app = application as LauncherApp
     private val appRepository = app.appRepository
@@ -117,6 +121,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         application = application,
         scope = viewModelScope,
         database = database,
+        savedStateHandle = savedStateHandle,
         hostResumedProvider = { _hostResumed.value },
     )
 
@@ -157,10 +162,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         _hasNotificationAccess.value = NotificationAccessHelper.hasAccess(getApplication())
     }
 
-    fun appToBadgeKey(app: AppInfo): BadgeKey {
-        val serial = userManager?.getSerialNumberForUser(app.userHandle) ?: 0L
-        return BadgeKey(app.packageName, serial)
-    }
+    fun appToBadgeKey(app: AppInfo): BadgeKey = app.badgeKey
 
     fun hasNotification(app: AppInfo, isPinned: Boolean): Boolean {
         return notificationPanelManager.hasNotification(
@@ -416,7 +418,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
 
         // Prune favorites/hidden rows of uninstalled packages.
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             appRepository.packageEvents.collect { event ->
                 if (event is com.ff.launcher.data.PackageEvent.Removed && !event.replacing) {
                     favoritesRepository.removePackage(event.packageName, event.userSerial)

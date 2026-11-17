@@ -60,12 +60,16 @@ object HomeStateBuilder {
             val rows = mutableListOf<HomeRow>()
             val visibleByKey = visibleApps.associateBy { it.componentKey }
             val favoriteApps = orderedFavoriteKeys.mapNotNull { visibleByKey[it] }
-            favoriteApps.forEach { rows += HomeRow.AppRow(app = it, isFavorite = true) }
-            if (favoriteApps.isNotEmpty()) rows += HomeRow.Divider
+            val favoriteAppRows = favoriteApps.map { HomeRow.AppRow(app = it, isFavorite = true) }
+            rows.addAll(favoriteAppRows)
+            if (favoriteAppRows.isNotEmpty()) rows += HomeRow.Divider
+            val remaining = visibleApps.filter { it.componentKey !in favoritesSet }.sortedBy { it.label }
+            remaining.forEach { rows += HomeRow.AppRow(app = it, isFavorite = false) }
             return HomeListState(
                 rows = rows,
+                favoriteRows = favoriteAppRows,
                 sections = emptyList(),
-                favoriteCount = favoriteApps.size,
+                favoriteCount = favoriteAppRows.size,
                 favoriteKeys = orderedFavoriteKeys,
             )
         }
@@ -98,8 +102,9 @@ object HomeStateBuilder {
         // Maintain the user's arranged sequence for favorites:
         val visibleByKey = visibleApps.associateBy { it.componentKey }
         val favoriteApps = orderedFavoriteKeys.mapNotNull { visibleByKey[it] }
-        favoriteApps.forEach { rows += HomeRow.AppRow(app = it, isFavorite = true) }
-        if (favoriteApps.isNotEmpty()) rows += HomeRow.Divider
+        val favoriteAppRows = favoriteApps.map { HomeRow.AppRow(app = it, isFavorite = true) }
+        rows.addAll(favoriteAppRows)
+        if (favoriteAppRows.isNotEmpty()) rows += HomeRow.Divider
 
         val bySection = placements.groupBy { it.section }
         bySection.keys
@@ -124,8 +129,9 @@ object HomeStateBuilder {
         }
         return HomeListState(
             rows = rows,
+            favoriteRows = favoriteAppRows,
             sections = sections,
-            favoriteCount = favoriteApps.size,
+            favoriteCount = favoriteAppRows.size,
             favoriteKeys = orderedFavoriteKeys,
         )
     }

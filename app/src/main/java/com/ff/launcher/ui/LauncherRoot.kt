@@ -98,8 +98,18 @@ fun LauncherRoot(viewModel: LauncherViewModel) {
     val context = LocalContext.current
 
     val badgePreferences by viewModel.badgePreferences.collectAsStateWithLifecycle()
+    val notificationKeys by viewModel.notificationKeys.collectAsStateWithLifecycle()
+    val hasNotificationAccess by viewModel.hasNotificationAccess.collectAsStateWithLifecycle()
     val expandedBadgeKey by viewModel.expandedBadgeKey.collectAsStateWithLifecycle()
     val expandedCards by viewModel.expandedCards.collectAsStateWithLifecycle()
+
+    val badgeState = remember(badgePreferences, notificationKeys, hasNotificationAccess) {
+        com.ff.launcher.viewmodel.BadgeEvaluationState(
+            prefs = badgePreferences,
+            activeKeys = notificationKeys,
+            hasAccess = hasNotificationAccess,
+        )
+    }
 
     // Default-launcher re-prompt: shows a top banner when the user returns after
     // switching to another launcher, session-dismissable but reset when the role toggles.
@@ -135,6 +145,16 @@ fun LauncherRoot(viewModel: LauncherViewModel) {
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.30f)), // readability scrim over wallpaper
     ) {
+        val showDefaultBanner = onboardingDone == true &&
+            !isDefaultLauncher &&
+            !isSecondScreenOpen &&
+            !bannerDismissed.value
+
+        val bannerExtraTopPadding by androidx.compose.animation.core.animateDpAsState(
+            targetValue = if (showDefaultBanner) 136.dp else 0.dp,
+            label = "bannerExtraTopPadding",
+        )
+
         AnimatedVisibility(
             visible = !isSecondScreenOpen,
             enter = fadeIn(tween(140)),
@@ -144,6 +164,8 @@ fun LauncherRoot(viewModel: LauncherViewModel) {
             HomeScreen(
                 state = homeState,
                 listState = listState,
+                maxHeight = maxHeight,
+                extraTopPadding = bannerExtraTopPadding,
                 homeResetTrigger = homeResetTrigger,
                 homeWidgetSlot = homeWidgetSlot,
                 timeData = timeState,
@@ -164,7 +186,7 @@ fun LauncherRoot(viewModel: LauncherViewModel) {
                     context.startActivity(Intent(context, SettingsActivity::class.java))
                 },
                 onOpenSearch = viewModel::openAppSearch,
-                hasNotification = viewModel::hasNotification,
+                hasNotification = { app, isPinned -> badgeState.hasNotification(app.badgeKey, isPinned) },
                 expandedBadgeKey = expandedBadgeKey,
                 expandedCards = expandedCards,
                 markAsReadEnabled = badgePreferences.markAsReadOnDismiss,
@@ -214,6 +236,7 @@ fun LauncherRoot(viewModel: LauncherViewModel) {
         ) {
             SecondaryScreen(
                 slots = secondarySlots,
+                maxHeight = maxHeight,
                 isTriggerOnRight = slideFromEnd,
                 onRequestWidget = viewModel::requestWidgetForSlot,
                 onRemoveWidget = viewModel::removeWidgetFromSlot,
@@ -321,7 +344,7 @@ fun LauncherRoot(viewModel: LauncherViewModel) {
                     viewModel.closeAppSearch()
                     context.startActivity(Intent(context, SettingsActivity::class.java))
                 },
-                hasNotification = { app -> viewModel.hasNotification(app, isPinned = false) },
+                hasNotification = { app -> badgeState.hasNotification(app.badgeKey, isPinned = false) },
                 expandedBadgeKey = expandedBadgeKey,
                 expandedCards = expandedCards,
                 markAsReadEnabled = badgePreferences.markAsReadOnDismiss,

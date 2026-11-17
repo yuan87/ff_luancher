@@ -51,6 +51,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -91,6 +92,7 @@ import kotlin.math.roundToInt
 @Composable
 fun SecondaryScreen(
     slots: List<WidgetSlotEntity>,
+    maxHeight: androidx.compose.ui.unit.Dp,
     isTriggerOnRight: Boolean,
     onRequestWidget: (Int) -> Unit,
     onRemoveWidget: (Int) -> Unit,
@@ -117,14 +119,15 @@ fun SecondaryScreen(
     val canAddMore = activeSlots.size < 4
     val nextAvailableSlotId = (1..4).firstOrNull { id -> activeSlots.none { it.slotId == id } } ?: 4
 
-    BoxWithConstraints(
+    val totalScreenHeight = maxHeight
+    val contentHeight = (totalScreenHeight - insets.calculateTopPadding() - insets.calculateBottomPadding() - 56.dp)
+        .coerceAtLeast(200.dp)
+
+    Box(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Transparent),
     ) {
-        val totalScreenHeight = maxHeight
-        val contentHeight = (totalScreenHeight - insets.calculateTopPadding() - insets.calculateBottomPadding() - 56.dp)
-            .coerceAtLeast(200.dp)
 
         if (!isEditMode) {
             // ================= NORMAL VIEWING MODE =================
@@ -165,18 +168,21 @@ fun SecondaryScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         activeSlots.forEach { slot ->
-                            val fraction = normalizeSlotFraction(slot.heightWeight)
-                            val slotHeightDp = contentHeight * fraction
+                            val widgetKey = slot.appWidgetId ?: slot.slotId
+                            key(widgetKey) {
+                                val fraction = normalizeSlotFraction(slot.heightWeight)
+                                val slotHeightDp = contentHeight * fraction
 
-                            NormalWidgetHost(
-                                slot = slot,
-                                heightDp = slotHeightDp,
-                                obtainHostView = obtainHostView,
-                                onLongPress = {
-                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    isEditMode = true
-                                },
-                            )
+                                NormalWidgetHost(
+                                    slot = slot,
+                                    heightDp = slotHeightDp,
+                                    obtainHostView = obtainHostView,
+                                    onLongPress = {
+                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        isEditMode = true
+                                    },
+                                )
+                            }
                         }
                     }
                 }
@@ -247,7 +253,7 @@ private fun NormalWidgetHost(
     }
     if (!providerAlive) return
 
-    val hostView = remember(slot.slotId, appWidgetId) {
+    val hostView = remember(appWidgetId) {
         obtainHostView(context, slot.slotId, appWidgetId)
     } ?: return
 
@@ -326,7 +332,7 @@ private fun EditModePanel(
                     )
                     val usagePercent = (totalAllocatedFraction * 100).roundToInt()
                     Text(
-                        text = "Screen usage: $usagePercent% / 100%",
+                        text = stringResource(R.string.edit_widgets_screen_usage, usagePercent),
                         style = MaterialTheme.typography.bodySmall,
                         color = if (totalAllocatedFraction >= 0.99f) {
                             MaterialTheme.colorScheme.primary
@@ -364,35 +370,38 @@ private fun EditModePanel(
 
         // --- Floating Canvases ---
         activeSlots.forEachIndexed { index, slot ->
-            val fraction = normalizeSlotFraction(slot.heightWeight)
-            val slotHeightDp = contentHeight * fraction
+            val widgetKey = slot.appWidgetId ?: slot.slotId
+            key(widgetKey) {
+                val fraction = normalizeSlotFraction(slot.heightWeight)
+                val slotHeightDp = contentHeight * fraction
 
-            FloatingWidgetCard(
-                slot = slot,
-                index = index,
-                totalCount = activeSlots.size,
-                heightDp = slotHeightDp,
-                totalAllocatedFraction = totalAllocatedFraction,
-                obtainHostView = obtainHostView,
-                onUpdateSlotWeight = onUpdateSlotWeight,
-                onRemove = { onRemoveWidget(slot.slotId) },
-                onMoveUp = {
-                    if (index > 0) {
-                        val mutable = activeSlots.toMutableList()
-                        val item = mutable.removeAt(index)
-                        mutable.add(index - 1, item)
-                        onReorderSlots(mutable)
-                    }
-                },
-                onMoveDown = {
-                    if (index < activeSlots.lastIndex) {
-                        val mutable = activeSlots.toMutableList()
-                        val item = mutable.removeAt(index)
-                        mutable.add(index + 1, item)
-                        onReorderSlots(mutable)
-                    }
-                },
-            )
+                FloatingWidgetCard(
+                    slot = slot,
+                    index = index,
+                    totalCount = activeSlots.size,
+                    heightDp = slotHeightDp,
+                    totalAllocatedFraction = totalAllocatedFraction,
+                    obtainHostView = obtainHostView,
+                    onUpdateSlotWeight = onUpdateSlotWeight,
+                    onRemove = { onRemoveWidget(slot.slotId) },
+                    onMoveUp = {
+                        if (index > 0) {
+                            val mutable = activeSlots.toMutableList()
+                            val item = mutable.removeAt(index)
+                            mutable.add(index - 1, item)
+                            onReorderSlots(mutable)
+                        }
+                    },
+                    onMoveDown = {
+                        if (index < activeSlots.lastIndex) {
+                            val mutable = activeSlots.toMutableList()
+                            val item = mutable.removeAt(index)
+                            mutable.add(index + 1, item)
+                            onReorderSlots(mutable)
+                        }
+                    },
+                )
+            }
         }
 
         // --- Bottom Add Widget Section ---
@@ -484,7 +493,7 @@ private fun FloatingWidgetCard(
     val currentFraction = normalizeSlotFraction(slot.heightWeight)
     val fractionWithoutCurrent = totalAllocatedFraction - currentFraction
 
-    val hostView = remember(slot.slotId, appWidgetId) {
+    val hostView = remember(appWidgetId) {
         obtainHostView(context, slot.slotId, appWidgetId)
     }
 
@@ -542,7 +551,7 @@ private fun FloatingWidgetCard(
                     ) {
                         Icon(
                             imageVector = Icons.Default.KeyboardArrowUp,
-                            contentDescription = "Move up",
+                            contentDescription = stringResource(R.string.a11y_move_widget_up),
                             modifier = Modifier.size(20.dp),
                         )
                     }
@@ -553,7 +562,7 @@ private fun FloatingWidgetCard(
                     ) {
                         Icon(
                             imageVector = Icons.Default.KeyboardArrowDown,
-                            contentDescription = "Move down",
+                            contentDescription = stringResource(R.string.a11y_move_widget_down),
                             modifier = Modifier.size(20.dp),
                         )
                     }
